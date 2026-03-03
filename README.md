@@ -6,7 +6,7 @@ A short course on RL and multi-agent RL with applications in economics. The cour
 - RL fundamentals: agent-environment loop and MDP definition.
 - MDP assumptions (Markov property, full observability, stationarity, unknown dynamics).
 - Discounted returns, value functions, and Bellman equations.
-- Dynamic programming and temporal-difference learning (introductory coverage).
+- Dynamic programming and temporal-difference learning.
 - Examples: level-based foraging and economy as a multi-agent system.
 
 ## L2: Deep Reinforcement Learning
@@ -16,7 +16,7 @@ A short course on RL and multi-agent RL with applications in economics. The cour
 - Correlated experience problem and replay buffers.
 - DQN algorithm and training loop.
 - Overestimation bias and Double DQN.
-- Policy gradient methods (intro section follows DQN content).
+- Policy gradient methods .
 
 ## L3: Games and MARL Basics
 - From MDPs to game models for multi-agent settings.
@@ -24,7 +24,7 @@ A short course on RL and multi-agent RL with applications in economics. The cour
 - Stochastic games and POSGs, with formal definitions and processes.
 - Game classes: zero-sum, common-reward, general-sum.
 - Assumptions in game theory vs MARL.
-- Solution concepts and joint policy reasoning (outlined in the deck).
+- Solution concepts and joint policy reasoning.
 
 ## L4: MARL Algorithms and Challenges
 - MARL learning framework and convergence notions.
