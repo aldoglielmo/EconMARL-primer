@@ -209,3 +209,10 @@ __marimo__/
 
 # mac files
 .DS_Store
+
+
+# tensorboard
+events.out.tfevents.*
+
+# video
+*.mp4
