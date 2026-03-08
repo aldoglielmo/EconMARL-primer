@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EconMARL Primer - Course Materials</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .intro {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .lesson {
+            background-color: white;
+            margin: 20px 0;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .lesson h2 {
+            color: #2c3e50;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        .resources {
+            display: grid;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .resource-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+            text-decoration: none;
+            color: #2c3e50;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        .resource-link:hover {
+            background-color: #e9ecef;
+            border-left-color: #2980b9;
+            transform: translateX(5px);
+        }
+        .resource-link.external::after {
+            content: "↗";
+            margin-left: auto;
+            color: #999;
+            font-size: 1.2em;
+        }
+        .resource-icon {
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+        .resource-label {
+            font-weight: 600;
+            color: #3498db;
+        }
+        footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 0.9em;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>(Multi-Agent) Reinforcement Learning<br>a primer, with applications in economics</h1>
+    
+    <div class="intro">
+        <p>An introduction to reinforcement learning (RL) and multi-agent reinforcement learning (MARL) for economics. 
+           The course covers foundational RL concepts through modern deep learning approaches, with interactive demonstrations and code examples often illustrating applications in economics.</p>
+    </div>
+
+    <!-- Lesson 1 -->
+    <div class="lesson">
+        <h2>Lesson 1: Introduction & RL Basics</h2>
+        <div class="resources">
+            <a href="https://github.com/aldoglielmo/EconMARL-primer/raw/main/slides/L1_Introduction.pdf" class="resource-link external" target="_blank">
+                <span class="resource-icon">📄</span>
+                <span class="resource-label">Presentation</span>
+            </a>
+            <a href="https://github.com/aldoglielmo/EconMARL-primer/raw/main/slides/L1_Intro%26RLBasics.pdf" class="resource-link external" target="_blank">
+                <span class="resource-icon">📄</span>
+                <span class="resource-label">Slides</span>
+            </a>
+            <a href="https://uonliaquat.github.io/RL_Visualizer/" class="resource-link external" target="_blank">
+                <span class="resource-icon">🎮</span>
+                <span class="resource-label">Demo: dynamic programming</span>
+            </a>
+            <a href="https://awjuliani.github.io/web-rl-playground/" class="resource-link external" target="_blank">
+                <span class="resource-icon">🎮</span>
+                <span class="resource-label">Demo: tabular RL</span>
+            </a>
+            <a href="/code/L1" class="resource-link">
+                <span class="resource-icon">💻</span>
+                <span class="resource-label">Code for hands-on session</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Lesson 2 -->
+    <div class="lesson">
+        <h2>Lesson 2: Deep RL</h2>
+        <div class="resources">
+            <a href="https://github.com/aldoglielmo/EconMARL-primer/raw/main/slides/L2_DeepRL.pdf" class="resource-link external" target="_blank">
+                <span class="resource-icon">📄</span>
+                <span class="resource-label">Slides</span>
+            </a>
+            <a href="https://github.com/aldoglielmo/EconMARL-primer/blob/main/code/L2/1_dqn_sb3.ipynb" class="resource-link external" target="_blank">
+                <span class="resource-icon">🎮</span>
+                <span class="resource-label">Demo: DQN with SB3</span>
+            </a>
+            <a href="https://github.com/aldoglielmo/EconMARL-primer/raw/main/slides/L2_GasRL.pdf" class="resource-link external" target="_blank">
+                <span class="resource-icon">📄</span>
+                <span class="resource-label">Application in economics</span>
+            </a>
+            <a href="https://github.com/aldoglielmo/EconMARL-primer/tree/main/code/L2" class="resource-link external" target="_blank">
+                <span class="resource-icon">💻</span>
+                <span class="resource-label">Code for hands-on session</span>
+            </a>
+        </div>
+    </div>
+    
+    <!-- Lesson 3 -->
+    <div class="lesson">
+        <h2>Lesson 3: Games and MARL Basics</h2>
+        <div class="resources">
+            <a href="https://github.com/aldoglielmo/EconMARL-primer/raw/main/slides/L3_Games%26MARLBasics.pdf" class="resource-link external" target="_blank">
+                <span class="resource-icon">📄</span>
+                <span class="resource-label">Slides</span>
+            </a>
+            <a href="code/L3/1_matrix-game-explorer.html" class="resource-link">
+                <span class="resource-icon">🎮</span>
+                <span class="resource-label">Demo: matrix games</span>
+            </a>
+            <a href="code/L3/2_pareto-frontier-visualizer.html" class="resource-link">
+                <span class="resource-icon">🎮</span>
+                <span class="resource-label">Demo: solution concepts</span>
+            </a>
+            <a href="https://github.com/aldoglielmo/EconMARL-primer/raw/main/slides/L3_TOBEADDED.pdf" class="resource-link external" target="_blank">
+                <span class="resource-icon">📄</span>
+                <span class="resource-label">Application in economics (coming soon)</span>
+            </a>
+            <a href="/code/L3" class="resource-link">
+                <span class="resource-icon">💻</span>
+                <span class="resource-label">Code for hands-on session (coming soon)</span>
+            </a>
+        </div>
+    </div>
+    
+    <footer>
+        <p>Part of the <a href="https://github.com/aldoglielmo/EconMARL-primer" style="color: #3498db; text-decoration: none;">EconMARL-primer</a> repository</p>
+    </footer>
+</body>
+</html>
