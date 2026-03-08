@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pareto Frontier Visualizer - Game Theory</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Simple icons
+        const TrendingUp = ({ size = 24, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                <polyline points="17 6 23 6 23 12"/>
+            </svg>
+        );
+
+        const Award = ({ size = 24, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+                <circle cx="12" cy="8" r="7"/>
+                <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
+            </svg>
+        );
+
+        const ParetoFrontierVisualizer = () => {
+            const canvasRef = useRef(null);
+            
+            // Define available games
+            const games = {
+                chicken: {
+                    name: "Chicken Game",
+                    matrix: [
+                        [[6, 6], [2, 7]],
+                        [[7, 2], [0, 0]]
+                    ],
+                    actions: { row: ['Swerve', 'Straight'], col: ['Swerve', 'Straight'] }
+                },
+                battleOfSexes: {
+                    name: "Battle of Sexes",
+                    matrix: [
+                        [[7, 6], [0, 0]],
+                        [[0, 0], [6, 7]]
+                    ],
+                    actions: { row: ['Opera', 'Football'], col: ['Opera', 'Football'] }
+                },
+                prisonersDilemma: {
+                    name: "Prisoner's Dilemma",
+                    matrix: [
+                        [[3, 3], [0, 5]],
+                        [[5, 0], [1, 1]]
+                    ],
+                    actions: { row: ['Cooperate', 'Defect'], col: ['Cooperate', 'Defect'] }
+                },
+                stagHunt: {
+                    name: "Stag Hunt",
+                    matrix: [
+                        [[5, 5], [0, 3]],
+                        [[3, 0], [3, 3]]
+                    ],
+                    actions: { row: ['Stag', 'Hare'], col: ['Stag', 'Hare'] }
+                },
+                custom: {
+                    name: "Custom Game",
+                    matrix: [
+                        [[4, 4], [2, 5]],
+                        [[5, 2], [3, 3]]
+                    ],
+                    actions: { row: ['Action A', 'Action B'], col: ['Action A', 'Action B'] }
+                }
+            };
+            
+            // Game selection state
+            const [selectedGame, setSelectedGame] = useState('chicken');
+            
+            // Custom game inputs
+            const [customPayoffs, setCustomPayoffs] = useState({
+                p1_00: 4, p2_00: 4,
+                p1_01: 2, p2_01: 5,
+                p1_10: 5, p2_10: 2,
+                p1_11: 3, p2_11: 3
+            });
+            const [customActions, setCustomActions] = useState({
+                row0: 'Action A',
+                row1: 'Action B',
+                col0: 'Action A',
+                col1: 'Action B'
+            });
+            
+            // Build current game based on selection
+            let currentGame;
+            if (selectedGame === 'custom') {
+                currentGame = {
+                    name: "Custom Game",
+                    matrix: [
+                        [[customPayoffs.p1_00, customPayoffs.p2_00], [customPayoffs.p1_01, customPayoffs.p2_01]],
+                        [[customPayoffs.p1_10, customPayoffs.p2_10], [customPayoffs.p1_11, customPayoffs.p2_11]]
+                    ],
+                    actions: {
+                        row: [customActions.row0, customActions.row1],
+                        col: [customActions.col0, customActions.col1]
+                    }
+                };
+            } else {
+                currentGame = games[selectedGame];
+            }
+            
+            const matrix = currentGame.matrix;
+            const actions = currentGame.actions;
+            
+            // Settings
+            const [gridResolution, setGridResolution] = useState(20);
+            const [showParetoFrontier, setShowParetoFrontier] = useState(true);
+            const [showNashEquilibria, setShowNashEquilibria] = useState(true);
+            const [showWelfareOptimal, setShowWelfareOptimal] = useState(true);
+            const [showFairnessOptimal, setShowFairnessOptimal] = useState(true);
+            const [showDeterministicOnly, setShowDeterministicOnly] = useState(false);
+            const [hoveredPoint, setHoveredPoint] = useState(null);
+
+            // Calculate expected payoff for a joint mixed strategy
+            const calculateExpectedPayoff = (p1_swerve, p2_swerve) => {
+                let u1 = 0, u2 = 0;
+                
+                // (Swerve, Swerve)
+                u1 += p1_swerve * p2_swerve * matrix[0][0][0];
+                u2 += p1_swerve * p2_swerve * matrix[0][0][1];
+                
+                // (Swerve, Straight)
+                u1 += p1_swerve * (1 - p2_swerve) * matrix[0][1][0];
+                u2 += p1_swerve * (1 - p2_swerve) * matrix[0][1][1];
+                
+                // (Straight, Swerve)
+                u1 += (1 - p1_swerve) * p2_swerve * matrix[1][0][0];
+                u2 += (1 - p1_swerve) * p2_swerve * matrix[1][0][1];
+                
+                // (Straight, Straight)
+                u1 += (1 - p1_swerve) * (1 - p2_swerve) * matrix[1][1][0];
+                u2 += (1 - p1_swerve) * (1 - p2_swerve) * matrix[1][1][1];
+                
+                return [u1, u2];
+            };
+
+            // Generate all feasible joint policies
+            const generateFeasiblePoints = () => {
+                const points = [];
+                const step = 1 / gridResolution;
+                
+                for (let i = 0; i <= gridResolution; i++) {
+                    for (let j = 0; j <= gridResolution; j++) {
+                        const p1_swerve = i * step;
+                        const p2_swerve = j * step;
+                        const [u1, u2] = calculateExpectedPayoff(p1_swerve, p2_swerve);
+                        
+                        points.push({
+                            p1_swerve,
+                            p2_swerve,
+                            u1,
+                            u2,
+                            isDeterministic: (p1_swerve === 0 || p1_swerve === 1) && 
+                                           (p2_swerve === 0 || p2_swerve === 1)
+                        });
+                    }
+                }
+                
+                return points;
+            };
+
+            // Check if a point is Pareto dominated
+            const isParetoOptimal = (point, allPoints) => {
+                return !allPoints.some(other => 
+                    (other.u1 > point.u1 && other.u2 >= point.u2) ||
+                    (other.u1 >= point.u1 && other.u2 > point.u2)
+                );
+            };
+
+            // Find Nash equilibria (pure strategy)
+            const getNashEquilibria = () => {
+                const nash = [];
+                
+                // Check each pure strategy profile
+                for (let i = 0; i < 2; i++) {
+                    for (let j = 0; j < 2; j++) {
+                        let isNash = true;
+                        
+                        // Check if player 1 wants to deviate
+                        for (let i_prime = 0; i_prime < 2; i_prime++) {
+                            if (matrix[i_prime][j][0] > matrix[i][j][0]) {
+                                isNash = false;
+                                break;
+                            }
+                        }
+                        
+                        // Check if player 2 wants to deviate
+                        if (isNash) {
+                            for (let j_prime = 0; j_prime < 2; j_prime++) {
+                                if (matrix[i][j_prime][1] > matrix[i][j][1]) {
+                                    isNash = false;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (isNash) {
+                            nash.push({
+                                i, j,
+                                u1: matrix[i][j][0],
+                                u2: matrix[i][j][1],
+                                p1_swerve: i === 0 ? 1 : 0,
+                                p2_swerve: j === 0 ? 1 : 0,
+                                label: `(${actions.row[i]}, ${actions.col[j]})`
+                            });
+                        }
+                    }
+                }
+                
+                return nash;
+            };
+
+            const feasiblePoints = generateFeasiblePoints();
+            const paretoPoints = feasiblePoints.filter(p => isParetoOptimal(p, feasiblePoints));
+            const nashEquilibria = getNashEquilibria();
+            
+            // Find all welfare optimal points (max sum of utilities)
+            const maxWelfare = Math.max(...feasiblePoints.map(p => p.u1 + p.u2));
+            const welfareOptimal = feasiblePoints.filter(p => 
+                Math.abs((p.u1 + p.u2) - maxWelfare) < 0.0001
+            );
+            
+            // Find all fairness optimal points (max product of utilities)
+            const maxFairness = Math.max(...feasiblePoints.map(p => p.u1 * p.u2));
+            const fairnessOptimal = feasiblePoints.filter(p => 
+                Math.abs((p.u1 * p.u2) - maxFairness) < 0.0001
+            );
+
+            // Drawing function
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                
+                const ctx = canvas.getContext('2d');
+                const width = canvas.width;
+                const height = canvas.height;
+                
+                // Clear canvas
+                ctx.fillStyle = '#0f0f23';
+                ctx.fillRect(0, 0, width, height);
+                
+                // Define coordinate system
+                const padding = 60;
+                const plotWidth = width - 2 * padding;
+                const plotHeight = height - 2 * padding;
+                
+                const minU = 0;
+                const maxU = 8;
+                
+                const scaleX = (u) => padding + ((u - minU) / (maxU - minU)) * plotWidth;
+                const scaleY = (u) => height - padding - ((u - minU) / (maxU - minU)) * plotHeight;
+                
+                // Draw grid
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= 8; i++) {
+                    // Vertical lines
+                    ctx.beginPath();
+                    ctx.moveTo(scaleX(i), padding);
+                    ctx.lineTo(scaleX(i), height - padding);
+                    ctx.stroke();
+                    
+                    // Horizontal lines
+                    ctx.beginPath();
+                    ctx.moveTo(padding, scaleY(i));
+                    ctx.lineTo(width - padding, scaleY(i));
+                    ctx.stroke();
+                }
+                
+                // Draw axes
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 2;
+                
+                // X-axis
+                ctx.beginPath();
+                ctx.moveTo(padding, height - padding);
+                ctx.lineTo(width - padding, height - padding);
+                ctx.stroke();
+                
+                // Y-axis
+                ctx.beginPath();
+                ctx.moveTo(padding, padding);
+                ctx.lineTo(padding, height - padding);
+                ctx.stroke();
+                
+                // Axis labels
+                ctx.fillStyle = '#00d4ff';
+                ctx.font = 'bold 14px "JetBrains Mono", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('Player 1 Expected Utility →', width / 2, height - 20);
+                
+                ctx.save();
+                ctx.translate(20, height / 2);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillStyle = '#7b2ff7';
+                ctx.fillText('Player 2 Expected Utility →', 0, 0);
+                ctx.restore();
+                
+                // Axis tick labels
+                ctx.fillStyle = '#a8a8c8';
+                ctx.font = '12px "JetBrains Mono", monospace';
+                for (let i = 0; i <= 8; i++) {
+                    ctx.textAlign = 'center';
+                    ctx.fillText(i.toString(), scaleX(i), height - padding + 20);
+                    
+                    ctx.textAlign = 'right';
+                    ctx.fillText(i.toString(), padding - 10, scaleY(i) + 4);
+                }
+                
+                // Draw all feasible points
+                const pointsToShow = showDeterministicOnly 
+                    ? feasiblePoints.filter(p => p.isDeterministic)
+                    : feasiblePoints;
+                
+                pointsToShow.forEach(point => {
+                    const x = scaleX(point.u1);
+                    const y = scaleY(point.u2);
+                    
+                    ctx.fillStyle = 'rgba(100, 100, 150, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+                
+                // Draw Pareto frontier
+                if (showParetoFrontier) {
+                    // Sort Pareto points by u1 for drawing
+                    const sortedPareto = [...paretoPoints].sort((a, b) => a.u1 - b.u1);
+                    
+                    ctx.strokeStyle = '#06d6a0';
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([]);
+                    
+                    ctx.beginPath();
+                    sortedPareto.forEach((point, i) => {
+                        const x = scaleX(point.u1);
+                        const y = scaleY(point.u2);
+                        
+                        if (i === 0) {
+                            ctx.moveTo(x, y);
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    });
+                    ctx.stroke();
+                    
+                    // Draw Pareto points
+                    sortedPareto.forEach(point => {
+                        const x = scaleX(point.u1);
+                        const y = scaleY(point.u2);
+                        
+                        ctx.fillStyle = '#06d6a0';
+                        ctx.beginPath();
+                        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+                
+                // Draw Nash equilibria
+                if (showNashEquilibria) {
+                    nashEquilibria.forEach(ne => {
+                        const x = scaleX(ne.u1);
+                        const y = scaleY(ne.u2);
+                        
+                        // Star background
+                        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+                        ctx.beginPath();
+                        ctx.arc(x, y, 12, 0, 2 * Math.PI);
+                        ctx.fill();
+                        
+                        // Star border
+                        ctx.strokeStyle = '#ffd700';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([]);
+                        ctx.beginPath();
+                        ctx.arc(x, y, 10, 0, 2 * Math.PI);
+                        ctx.stroke();
+                        
+                        // Inner point
+                        ctx.fillStyle = '#ffd700';
+                        ctx.beginPath();
+                        ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                        ctx.fill();
+                        
+                        // Label
+                        ctx.fillStyle = '#ffd700';
+                        ctx.font = 'bold 11px "JetBrains Mono", monospace';
+                        ctx.textAlign = 'left';
+                        ctx.fillText(ne.label, x + 15, y + 4);
+                    });
+                }
+                
+                // Draw welfare optimal
+                if (showWelfareOptimal) {
+                    welfareOptimal.forEach(point => {
+                        const x = scaleX(point.u1);
+                        const y = scaleY(point.u2);
+                        
+                        ctx.strokeStyle = '#ff006e';
+                        ctx.lineWidth = 3;
+                        ctx.setLineDash([5, 5]);
+                        
+                        // Draw square
+                        ctx.beginPath();
+                        ctx.rect(x - 8, y - 8, 16, 16);
+                        ctx.stroke();
+                        
+                        ctx.fillStyle = 'rgba(255, 0, 110, 0.3)';
+                        ctx.fillRect(x - 8, y - 8, 16, 16);
+                        
+                        ctx.fillStyle = '#ff006e';
+                        ctx.setLineDash([]);
+                        ctx.beginPath();
+                        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+                
+                // Draw fairness optimal
+                if (showFairnessOptimal) {
+                    fairnessOptimal.forEach(point => {
+                        const x = scaleX(point.u1);
+                        const y = scaleY(point.u2);
+                        
+                        ctx.strokeStyle = '#fb5607';
+                        ctx.lineWidth = 3;
+                        ctx.setLineDash([5, 5]);
+                        
+                        // Draw diamond
+                        ctx.beginPath();
+                        ctx.moveTo(x, y - 10);
+                        ctx.lineTo(x + 10, y);
+                        ctx.lineTo(x, y + 10);
+                        ctx.lineTo(x - 10, y);
+                        ctx.closePath();
+                        ctx.stroke();
+                        
+                        ctx.fillStyle = 'rgba(251, 86, 7, 0.3)';
+                        ctx.fill();
+                        
+                        ctx.fillStyle = '#fb5607';
+                        ctx.setLineDash([]);
+                        ctx.beginPath();
+                        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+                
+                // Draw hovered point
+                if (hoveredPoint) {
+                    const x = scaleX(hoveredPoint.u1);
+                    const y = scaleY(hoveredPoint.u2);
+                    
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([]);
+                    ctx.beginPath();
+                    ctx.arc(x, y, 8, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+                
+            }, [feasiblePoints, paretoPoints, nashEquilibria, welfareOptimal, fairnessOptimal,
+                showParetoFrontier, showNashEquilibria, showWelfareOptimal, showFairnessOptimal,
+                showDeterministicOnly, hoveredPoint]);
+
+            // Handle mouse hover
+            const handleMouseMove = (e) => {
+                const canvas = canvasRef.current;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const padding = 60;
+                const plotWidth = canvas.width - 2 * padding;
+                const plotHeight = canvas.height - 2 * padding;
+                const minU = 0;
+                const maxU = 8;
+                
+                // Find closest point
+                let closestPoint = null;
+                let minDist = Infinity;
+                
+                feasiblePoints.forEach(point => {
+                    const px = padding + ((point.u1 - minU) / (maxU - minU)) * plotWidth;
+                    const py = canvas.height - padding - ((point.u2 - minU) / (maxU - minU)) * plotHeight;
+                    
+                    const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+                    if (dist < minDist && dist < 15) {
+                        minDist = dist;
+                        closestPoint = point;
+                    }
+                });
+                
+                setHoveredPoint(closestPoint);
+            };
+
+            return (
+                <div style={{
+                    minHeight: '100vh',
+                    background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%)',
+                    color: '#e6e6fa',
+                    fontFamily: '"JetBrains Mono", "Courier New", monospace',
+                    padding: '2rem'
+                }}>
+                    {/* Header */}
+                    <div style={{
+                        maxWidth: '1400px',
+                        margin: '0 auto',
+                        marginBottom: '2rem'
+                    }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem',
+                            marginBottom: '0.5rem'
+                        }}>
+                            <TrendingUp size={32} color="#06d6a0" />
+                            <h1 style={{
+                                fontSize: '2.5rem',
+                                fontWeight: '800',
+                                background: 'linear-gradient(135deg, #06d6a0 0%, #00d4ff 100%)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                margin: 0,
+                                letterSpacing: '-0.02em'
+                            }}>
+                                Pareto Frontier Visualizer
+                            </h1>
+                        </div>
+                        <p style={{
+                            fontSize: '1rem',
+                            color: '#a8a8c8',
+                            margin: 0,
+                            fontFamily: 'system-ui, sans-serif'
+                        }}>
+                            Explore feasible outcomes, Pareto optimality, and solution concepts in the Chicken Game
+                        </p>
+                    </div>
+
+                    <div style={{
+                        maxWidth: '1400px',
+                        margin: '0 auto',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 350px',
+                        gap: '2rem'
+                    }}>
+                        {/* Main Canvas Area */}
+                        <div>
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '2rem',
+                                marginBottom: '1.5rem'
+                            }}>
+                                <canvas
+                                    ref={canvasRef}
+                                    width={700}
+                                    height={700}
+                                    onMouseMove={handleMouseMove}
+                                    onMouseLeave={() => setHoveredPoint(null)}
+                                    style={{
+                                        display: 'block',
+                                        margin: '0 auto',
+                                        cursor: 'crosshair'
+                                    }}
+                                />
+                            </div>
+
+                            {/* Hovered Point Info */}
+                            {hoveredPoint && (
+                                <div style={{
+                                    background: 'rgba(255, 255, 255, 0.03)',
+                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    borderRadius: '12px',
+                                    padding: '1.5rem'
+                                }}>
+                                    <h3 style={{
+                                        fontSize: '1.1rem',
+                                        fontWeight: '700',
+                                        color: '#00d4ff',
+                                        margin: 0,
+                                        marginBottom: '1rem'
+                                    }}>
+                                        Policy Details
+                                    </h3>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: '1fr 1fr',
+                                        gap: '1rem',
+                                        fontSize: '0.9rem'
+                                    }}>
+                                        <div>
+                                            <div style={{ color: '#a8a8c8', marginBottom: '0.25rem' }}>
+                                                Player 1 Strategy
+                                            </div>
+                                            <div style={{ color: '#00d4ff', fontWeight: '600' }}>
+                                                {actions.row[0]}: {(hoveredPoint.p1_swerve * 100).toFixed(0)}%
+                                            </div>
+                                            <div style={{ color: '#00d4ff', fontWeight: '600' }}>
+                                                {actions.row[1]}: {((1 - hoveredPoint.p1_swerve) * 100).toFixed(0)}%
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style={{ color: '#a8a8c8', marginBottom: '0.25rem' }}>
+                                                Player 2 Strategy
+                                            </div>
+                                            <div style={{ color: '#7b2ff7', fontWeight: '600' }}>
+                                                {actions.col[0]}: {(hoveredPoint.p2_swerve * 100).toFixed(0)}%
+                                            </div>
+                                            <div style={{ color: '#7b2ff7', fontWeight: '600' }}>
+                                                {actions.col[1]}: {((1 - hoveredPoint.p2_swerve) * 100).toFixed(0)}%
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style={{ color: '#a8a8c8', marginBottom: '0.25rem' }}>
+                                                Expected Utilities
+                                            </div>
+                                            <div style={{ color: '#00d4ff', fontWeight: '600' }}>
+                                                U₁ = {hoveredPoint.u1.toFixed(2)}
+                                            </div>
+                                            <div style={{ color: '#7b2ff7', fontWeight: '600' }}>
+                                                U₂ = {hoveredPoint.u2.toFixed(2)}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style={{ color: '#a8a8c8', marginBottom: '0.25rem' }}>
+                                                Properties
+                                            </div>
+                                            <div style={{ color: '#06d6a0', fontWeight: '600' }}>
+                                                {isParetoOptimal(hoveredPoint, feasiblePoints) ? '✓ Pareto Optimal' : '✗ Pareto Dominated'}
+                                            </div>
+                                            <div style={{ color: '#a8a8c8', fontSize: '0.85rem' }}>
+                                                Welfare: {(hoveredPoint.u1 + hoveredPoint.u2).toFixed(2)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Control Panel */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Game Selector */}
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '1.5rem'
+                            }}>
+                                <h3 style={{
+                                    fontSize: '1.1rem',
+                                    fontWeight: '700',
+                                    color: '#00d4ff',
+                                    margin: 0,
+                                    marginBottom: '1rem'
+                                }}>
+                                    Select Game
+                                </h3>
+                                
+                                <select
+                                    value={selectedGame}
+                                    onChange={(e) => setSelectedGame(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem',
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        borderRadius: '8px',
+                                        color: '#ffffff',
+                                        fontSize: '0.95rem',
+                                        cursor: 'pointer',
+                                        marginBottom: '1rem'
+                                    }}
+                                >
+                                    {Object.entries(games).map(([key, game]) => (
+                                        <option key={key} value={key} style={{ background: '#1a1a2e' }}>
+                                            {game.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                
+                                {/* Custom Game Inputs */}
+                                {selectedGame === 'custom' && (
+                                    <div style={{
+                                        background: 'rgba(255, 255, 255, 0.02)',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        borderRadius: '8px',
+                                        padding: '1rem',
+                                        marginBottom: '1rem'
+                                    }}>
+                                        <div style={{
+                                            fontSize: '0.9rem',
+                                            fontWeight: '600',
+                                            color: '#00d4ff',
+                                            marginBottom: '0.75rem'
+                                        }}>
+                                            Action Names
+                                        </div>
+                                        
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: '#a8a8c8', display: 'block', marginBottom: '0.25rem' }}>
+                                                    Player 1 - Action 1
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={customActions.row0}
+                                                    onChange={(e) => setCustomActions({...customActions, row0: e.target.value})}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.5rem',
+                                                        background: 'rgba(255, 255, 255, 0.05)',
+                                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                        borderRadius: '4px',
+                                                        color: '#00d4ff',
+                                                        fontSize: '0.85rem'
+                                                    }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: '#a8a8c8', display: 'block', marginBottom: '0.25rem' }}>
+                                                    Player 1 - Action 2
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={customActions.row1}
+                                                    onChange={(e) => setCustomActions({...customActions, row1: e.target.value})}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.5rem',
+                                                        background: 'rgba(255, 255, 255, 0.05)',
+                                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                        borderRadius: '4px',
+                                                        color: '#00d4ff',
+                                                        fontSize: '0.85rem'
+                                                    }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: '#a8a8c8', display: 'block', marginBottom: '0.25rem' }}>
+                                                    Player 2 - Action 1
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={customActions.col0}
+                                                    onChange={(e) => setCustomActions({...customActions, col0: e.target.value})}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.5rem',
+                                                        background: 'rgba(255, 255, 255, 0.05)',
+                                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                        borderRadius: '4px',
+                                                        color: '#7b2ff7',
+                                                        fontSize: '0.85rem'
+                                                    }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: '#a8a8c8', display: 'block', marginBottom: '0.25rem' }}>
+                                                    Player 2 - Action 2
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={customActions.col1}
+                                                    onChange={(e) => setCustomActions({...customActions, col1: e.target.value})}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.5rem',
+                                                        background: 'rgba(255, 255, 255, 0.05)',
+                                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                        borderRadius: '4px',
+                                                        color: '#7b2ff7',
+                                                        fontSize: '0.85rem'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        <div style={{
+                                            fontSize: '0.9rem',
+                                            fontWeight: '600',
+                                            color: '#00d4ff',
+                                            marginBottom: '0.75rem'
+                                        }}>
+                                            Payoffs (0-8)
+                                        </div>
+                                        
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: '#a8a8c8', display: 'block', marginBottom: '0.25rem' }}>
+                                                    ({customActions.row0}, {customActions.col0})
+                                                </label>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="8"
+                                                        step="0.1"
+                                                        value={customPayoffs.p1_00}
+                                                        onChange={(e) => setCustomPayoffs({...customPayoffs, p1_00: parseFloat(e.target.value) || 0})}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.5rem',
+                                                            background: 'rgba(255, 255, 255, 0.05)',
+                                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                            borderRadius: '4px',
+                                                            color: '#00d4ff',
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                        placeholder="P1"
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="8"
+                                                        step="0.1"
+                                                        value={customPayoffs.p2_00}
+                                                        onChange={(e) => setCustomPayoffs({...customPayoffs, p2_00: parseFloat(e.target.value) || 0})}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.5rem',
+                                                            background: 'rgba(255, 255, 255, 0.05)',
+                                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                            borderRadius: '4px',
+                                                            color: '#7b2ff7',
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                        placeholder="P2"
+                                                    />
+                                                </div>
+                                            </div>
+                                            
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: '#a8a8c8', display: 'block', marginBottom: '0.25rem' }}>
+                                                    ({customActions.row0}, {customActions.col1})
+                                                </label>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="8"
+                                                        step="0.1"
+                                                        value={customPayoffs.p1_01}
+                                                        onChange={(e) => setCustomPayoffs({...customPayoffs, p1_01: parseFloat(e.target.value) || 0})}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.5rem',
+                                                            background: 'rgba(255, 255, 255, 0.05)',
+                                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                            borderRadius: '4px',
+                                                            color: '#00d4ff',
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                        placeholder="P1"
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="8"
+                                                        step="0.1"
+                                                        value={customPayoffs.p2_01}
+                                                        onChange={(e) => setCustomPayoffs({...customPayoffs, p2_01: parseFloat(e.target.value) || 0})}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.5rem',
+                                                            background: 'rgba(255, 255, 255, 0.05)',
+                                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                            borderRadius: '4px',
+                                                            color: '#7b2ff7',
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                        placeholder="P2"
+                                                    />
+                                                </div>
+                                            </div>
+                                            
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: '#a8a8c8', display: 'block', marginBottom: '0.25rem' }}>
+                                                    ({customActions.row1}, {customActions.col0})
+                                                </label>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="8"
+                                                        step="0.1"
+                                                        value={customPayoffs.p1_10}
+                                                        onChange={(e) => setCustomPayoffs({...customPayoffs, p1_10: parseFloat(e.target.value) || 0})}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.5rem',
+                                                            background: 'rgba(255, 255, 255, 0.05)',
+                                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                            borderRadius: '4px',
+                                                            color: '#00d4ff',
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                        placeholder="P1"
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="8"
+                                                        step="0.1"
+                                                        value={customPayoffs.p2_10}
+                                                        onChange={(e) => setCustomPayoffs({...customPayoffs, p2_10: parseFloat(e.target.value) || 0})}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.5rem',
+                                                            background: 'rgba(255, 255, 255, 0.05)',
+                                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                            borderRadius: '4px',
+                                                            color: '#7b2ff7',
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                        placeholder="P2"
+                                                    />
+                                                </div>
+                                            </div>
+                                            
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: '#a8a8c8', display: 'block', marginBottom: '0.25rem' }}>
+                                                    ({customActions.row1}, {customActions.col1})
+                                                </label>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="8"
+                                                        step="0.1"
+                                                        value={customPayoffs.p1_11}
+                                                        onChange={(e) => setCustomPayoffs({...customPayoffs, p1_11: parseFloat(e.target.value) || 0})}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.5rem',
+                                                            background: 'rgba(255, 255, 255, 0.05)',
+                                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                            borderRadius: '4px',
+                                                            color: '#00d4ff',
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                        placeholder="P1"
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="8"
+                                                        step="0.1"
+                                                        value={customPayoffs.p2_11}
+                                                        onChange={(e) => setCustomPayoffs({...customPayoffs, p2_11: parseFloat(e.target.value) || 0})}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.5rem',
+                                                            background: 'rgba(255, 255, 255, 0.05)',
+                                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                            borderRadius: '4px',
+                                                            color: '#7b2ff7',
+                                                            fontSize: '0.85rem'
+                                                        }}
+                                                        placeholder="P2"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div style={{
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '8px',
+                                    padding: '1rem',
+                                    fontSize: '0.85rem',
+                                    fontFamily: 'monospace'
+                                }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: '0.5rem', textAlign: 'center' }}>
+                                        <div></div>
+                                        <div style={{ color: '#7b2ff7', fontWeight: '600' }}>{actions.col[0]}</div>
+                                        <div style={{ color: '#7b2ff7', fontWeight: '600' }}>{actions.col[1]}</div>
+                                        
+                                        <div style={{ color: '#00d4ff', fontWeight: '600', textAlign: 'right', paddingRight: '0.5rem' }}>{actions.row[0]}</div>
+                                        <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '0.5rem', borderRadius: '4px' }}>
+                                            <span style={{ color: '#00d4ff' }}>{matrix[0][0][0]}</span>, <span style={{ color: '#7b2ff7' }}>{matrix[0][0][1]}</span>
+                                        </div>
+                                        <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '0.5rem', borderRadius: '4px' }}>
+                                            <span style={{ color: '#00d4ff' }}>{matrix[0][1][0]}</span>, <span style={{ color: '#7b2ff7' }}>{matrix[0][1][1]}</span>
+                                        </div>
+                                        
+                                        <div style={{ color: '#00d4ff', fontWeight: '600', textAlign: 'right', paddingRight: '0.5rem' }}>{actions.row[1]}</div>
+                                        <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '0.5rem', borderRadius: '4px' }}>
+                                            <span style={{ color: '#00d4ff' }}>{matrix[1][0][0]}</span>, <span style={{ color: '#7b2ff7' }}>{matrix[1][0][1]}</span>
+                                        </div>
+                                        <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '0.5rem', borderRadius: '4px' }}>
+                                            <span style={{ color: '#00d4ff' }}>{matrix[1][1][0]}</span>, <span style={{ color: '#7b2ff7' }}>{matrix[1][1][1]}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Display Options */}
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '1.5rem'
+                            }}>
+                                <h3 style={{
+                                    fontSize: '1.1rem',
+                                    fontWeight: '700',
+                                    color: '#00d4ff',
+                                    margin: 0,
+                                    marginBottom: '1rem'
+                                }}>
+                                    Display Options
+                                </h3>
+
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    padding: '0.75rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    marginBottom: '0.5rem'
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showParetoFrontier}
+                                        onChange={(e) => setShowParetoFrontier(e.target.checked)}
+                                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#06d6a0' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>Pareto Frontier</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#06d6a0' }}>Green line</div>
+                                    </div>
+                                </label>
+
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    padding: '0.75rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    marginBottom: '0.5rem'
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showNashEquilibria}
+                                        onChange={(e) => setShowNashEquilibria(e.target.checked)}
+                                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#ffd700' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>Nash Equilibria</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#ffd700' }}>Gold circles ⭐</div>
+                                    </div>
+                                </label>
+
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    padding: '0.75rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    marginBottom: '0.5rem'
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showWelfareOptimal}
+                                        onChange={(e) => setShowWelfareOptimal(e.target.checked)}
+                                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#ff006e' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>Welfare Optimal</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#ff006e' }}>Pink square ■</div>
+                                    </div>
+                                </label>
+
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    padding: '0.75rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    marginBottom: '0.5rem'
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showFairnessOptimal}
+                                        onChange={(e) => setShowFairnessOptimal(e.target.checked)}
+                                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#fb5607' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>Fairness Optimal</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#fb5607' }}>Orange diamond ◆</div>
+                                    </div>
+                                </label>
+
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    padding: '0.75rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer'
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showDeterministicOnly}
+                                        onChange={(e) => setShowDeterministicOnly(e.target.checked)}
+                                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#00d4ff' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>Pure Strategies Only</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#a8a8c8' }}>Hide mixed strategies</div>
+                                    </div>
+                                </label>
+                            </div>
+
+                            {/* Grid Resolution */}
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '1.5rem'
+                            }}>
+                                <h3 style={{
+                                    fontSize: '1.1rem',
+                                    fontWeight: '700',
+                                    color: '#00d4ff',
+                                    margin: 0,
+                                    marginBottom: '1rem'
+                                }}>
+                                    Grid Resolution
+                                </h3>
+                                
+                                <input
+                                    type="range"
+                                    min="5"
+                                    max="50"
+                                    value={gridResolution}
+                                    onChange={(e) => setGridResolution(parseInt(e.target.value))}
+                                    style={{
+                                        width: '100%',
+                                        accentColor: '#00d4ff',
+                                        marginBottom: '0.5rem'
+                                    }}
+                                />
+                                <div style={{
+                                    fontSize: '0.9rem',
+                                    color: '#a8a8c8',
+                                    textAlign: 'center'
+                                }}>
+                                    {gridResolution} × {gridResolution} = {(gridResolution + 1) * (gridResolution + 1)} points
+                                </div>
+                            </div>
+
+                            {/* Legend */}
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '1.5rem'
+                            }}>
+                                <h3 style={{
+                                    fontSize: '1.1rem',
+                                    fontWeight: '700',
+                                    color: '#00d4ff',
+                                    margin: 0,
+                                    marginBottom: '1rem'
+                                }}>
+                                    Key Concepts
+                                </h3>
+                                
+                                <div style={{
+                                    fontSize: '0.85rem',
+                                    lineHeight: '1.6',
+                                    color: '#a8a8c8'
+                                }}>
+                                    <div style={{ marginBottom: '0.75rem' }}>
+                                        <strong style={{ color: '#06d6a0' }}>Pareto Optimal:</strong> No other outcome improves one player without hurting the other
+                                    </div>
+                                    <div style={{ marginBottom: '0.75rem' }}>
+                                        <strong style={{ color: '#ffd700' }}>Nash Equilibrium:</strong> No player wants to unilaterally deviate
+                                    </div>
+                                    <div style={{ marginBottom: '0.75rem' }}>
+                                        <strong style={{ color: '#ff006e' }}>Welfare Optimal:</strong> Maximizes sum of utilities (U₁ + U₂)
+                                    </div>
+                                    <div>
+                                        <strong style={{ color: '#fb5607' }}>Fairness Optimal:</strong> Maximizes product of utilities (U₁ × U₂)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<ParetoFrontierVisualizer />, document.getElementById('root'));
+    </script>
+</body>
+</html>

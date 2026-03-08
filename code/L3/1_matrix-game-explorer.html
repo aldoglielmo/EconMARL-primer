@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix Game Explorer</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Lucide icons as simple SVG components
+        const Target = ({ size = 24, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <circle cx="12" cy="12" r="6"/>
+                <circle cx="12" cy="12" r="2"/>
+            </svg>
+        );
+
+        const Zap = ({ size = 24, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+        );
+
+        const MatrixGameExplorer = () => {
+            // Preset games
+            const presets = {
+                prisoners: {
+                    name: "Prisoner's Dilemma",
+                    matrix: [[[-1, -1], [-5, 0]], [[0, -5], [-3, -3]]],
+                    actions: { row: ['Cooperate', 'Defect'], col: ['Cooperate', 'Defect'] }
+                },
+                coordination: {
+                    name: "Coordination Game",
+                    matrix: [[[10, 10], [0, 0]], [[0, 0], [10, 10]]],
+                    actions: { row: ['A', 'B'], col: ['A', 'B'] }
+                },
+                rps: {
+                    name: "Rock-Paper-Scissors",
+                    matrix: [[[0, 0], [-1, 1], [1, -1]], [[1, -1], [0, 0], [-1, 1]], [[-1, 1], [1, -1], [0, 0]]],
+                    actions: { row: ['Rock', 'Paper', 'Scissors'], col: ['Rock', 'Paper', 'Scissors'] }
+                },
+                chicken: {
+                    name: "Chicken Game",
+                    matrix: [[[6, 6], [2, 7]], [[7, 2], [0, 0]]],
+                    actions: { row: ['Swerve', 'Straight'], col: ['Swerve', 'Straight'] }
+                },
+                custom: {
+                    name: "Custom Game",
+                    matrix: [[[3, 3], [0, 5]], [[5, 0], [1, 1]]],
+                    actions: { row: ['A1', 'A2'], col: ['B1', 'B2'] }
+                }
+            };
+
+            const [selectedPreset, setSelectedPreset] = useState('prisoners');
+            const [matrix, setMatrix] = useState(presets.prisoners.matrix);
+            const [actions, setActions] = useState(presets.prisoners.actions);
+            const [hoveredCell, setHoveredCell] = useState(null);
+            const [showBestResponse, setShowBestResponse] = useState(true);
+            const [highlightNash, setHighlightNash] = useState(true);
+
+            useEffect(() => {
+                const preset = presets[selectedPreset];
+                setMatrix(preset.matrix);
+                setActions(preset.actions);
+            }, [selectedPreset]);
+
+            // Game classification
+            const classifyGame = () => {
+                let isZeroSum = true;
+                let isCommonReward = true;
+
+                for (let i = 0; i < matrix.length; i++) {
+                    for (let j = 0; j < matrix[0].length; j++) {
+                        const [r1, r2] = matrix[i][j];
+                        if (Math.abs(r1 + r2) > 0.001) isZeroSum = false;
+                        if (Math.abs(r1 - r2) > 0.001) isCommonReward = false;
+                    }
+                }
+
+                if (isZeroSum) return { type: 'zero-sum', color: '#e63946', icon: '⚔️' };
+                if (isCommonReward) return { type: 'common-reward', color: '#06d6a0', icon: '🤝' };
+                return { type: 'general-sum', color: '#f77f00', icon: '🎯' };
+            };
+
+            // Find best responses
+            const getBestResponses = () => {
+                const rowBR = Array(matrix.length).fill(false).map(() => []);
+                const colBR = Array(matrix[0].length).fill(false).map(() => []);
+
+                // Row player's best responses for each column action
+                for (let j = 0; j < matrix[0].length; j++) {
+                    let maxPayoff = -Infinity;
+                    let bestRows = [];
+                    for (let i = 0; i < matrix.length; i++) {
+                        if (matrix[i][j][0] > maxPayoff) {
+                            maxPayoff = matrix[i][j][0];
+                            bestRows = [i];
+                        } else if (matrix[i][j][0] === maxPayoff) {
+                            bestRows.push(i);
+                        }
+                    }
+                    bestRows.forEach(i => rowBR[i][j] = true);
+                }
+
+                // Column player's best responses for each row action
+                for (let i = 0; i < matrix.length; i++) {
+                    let maxPayoff = -Infinity;
+                    let bestCols = [];
+                    for (let j = 0; j < matrix[0].length; j++) {
+                        if (matrix[i][j][1] > maxPayoff) {
+                            maxPayoff = matrix[i][j][1];
+                            bestCols = [j];
+                        } else if (matrix[i][j][1] === maxPayoff) {
+                            bestCols.push(j);
+                        }
+                    }
+                    bestCols.forEach(j => colBR[i][j] = true);
+                }
+
+                return { rowBR, colBR };
+            };
+
+            // Find Nash equilibria
+            const getNashEquilibria = () => {
+                const { rowBR, colBR } = getBestResponses();
+                const nash = [];
+
+                for (let i = 0; i < matrix.length; i++) {
+                    for (let j = 0; j < matrix[0].length; j++) {
+                        if (rowBR[i][j] && colBR[i][j]) {
+                            nash.push([i, j]);
+                        }
+                    }
+                }
+
+                return nash;
+            };
+
+            const classification = classifyGame();
+            const { rowBR, colBR } = getBestResponses();
+            const nashEquilibria = getNashEquilibria();
+
+            const updatePayoff = (i, j, player, value) => {
+                const newMatrix = matrix.map(row => row.map(cell => [...cell]));
+                newMatrix[i][j][player] = parseFloat(value) || 0;
+                setMatrix(newMatrix);
+            };
+
+            const isNashEquilibrium = (i, j) => {
+                return nashEquilibria.some(([ni, nj]) => ni === i && nj === j);
+            };
+
+            return (
+                <div style={{
+                    minHeight: '100vh',
+                    background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%)',
+                    color: '#e6e6fa',
+                    fontFamily: '"JetBrains Mono", "Courier New", monospace',
+                    padding: '2rem'
+                }}>
+                    {/* Header */}
+                    <div style={{
+                        maxWidth: '1400px',
+                        margin: '0 auto',
+                        marginBottom: '2rem'
+                    }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem',
+                            marginBottom: '0.5rem'
+                        }}>
+                            <Target size={32} color="#00d4ff" />
+                            <h1 style={{
+                                fontSize: '2.5rem',
+                                fontWeight: '800',
+                                background: 'linear-gradient(135deg, #00d4ff 0%, #7b2ff7 100%)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                margin: 0,
+                                letterSpacing: '-0.02em'
+                            }}>
+                                Matrix Game Explorer
+                            </h1>
+                        </div>
+                        <p style={{
+                            fontSize: '1rem',
+                            color: '#a8a8c8',
+                            margin: 0,
+                            fontFamily: 'system-ui, sans-serif'
+                        }}>
+                            Explore game types, Nash equilibria, and best response dynamics
+                        </p>
+                    </div>
+
+                    <div style={{
+                        maxWidth: '1400px',
+                        margin: '0 auto',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 380px',
+                        gap: '2rem'
+                    }}>
+                        {/* Main Game Area */}
+                        <div>
+                            {/* Game Selection */}
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '1.5rem',
+                                marginBottom: '1.5rem'
+                            }}>
+                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                    {Object.keys(presets).map(key => (
+                                        <button
+                                            key={key}
+                                            onClick={() => setSelectedPreset(key)}
+                                            style={{
+                                                padding: '0.75rem 1.25rem',
+                                                background: selectedPreset === key 
+                                                    ? 'linear-gradient(135deg, #00d4ff 0%, #7b2ff7 100%)' 
+                                                    : 'rgba(255, 255, 255, 0.05)',
+                                                border: selectedPreset === key 
+                                                    ? 'none' 
+                                                    : '1px solid rgba(255, 255, 255, 0.1)',
+                                                borderRadius: '8px',
+                                                color: selectedPreset === key ? '#0f0f23' : '#e6e6fa',
+                                                fontSize: '0.9rem',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                fontFamily: 'inherit'
+                                            }}
+                                            onMouseEnter={e => {
+                                                if (selectedPreset !== key) {
+                                                    e.target.style.background = 'rgba(255, 255, 255, 0.08)';
+                                                }
+                                            }}
+                                            onMouseLeave={e => {
+                                                if (selectedPreset !== key) {
+                                                    e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+                                                }
+                                            }}
+                                        >
+                                            {presets[key].name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Payoff Matrix */}
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '2rem',
+                                overflow: 'auto'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    marginBottom: '1.5rem'
+                                }}>
+                                    <h2 style={{
+                                        fontSize: '1.25rem',
+                                        fontWeight: '700',
+                                        color: '#00d4ff',
+                                        margin: 0
+                                    }}>
+                                        Payoff Matrix
+                                    </h2>
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '1rem',
+                                        fontSize: '0.9rem'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <div style={{
+                                                width: '12px',
+                                                height: '12px',
+                                                borderRadius: '3px',
+                                                background: '#00d4ff'
+                                            }} />
+                                            <span>Player 1</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <div style={{
+                                                width: '12px',
+                                                height: '12px',
+                                                borderRadius: '3px',
+                                                background: '#7b2ff7'
+                                            }} />
+                                            <span>Player 2</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'inline-block' }}>
+                                    {/* Column headers */}
+                                    <div style={{ display: 'flex', marginBottom: '0.5rem' }}>
+                                        <div style={{ width: '120px' }} />
+                                        {actions.col.map((action, j) => (
+                                            <div key={j} style={{
+                                                width: '140px',
+                                                textAlign: 'center',
+                                                fontSize: '0.9rem',
+                                                fontWeight: '600',
+                                                color: '#7b2ff7',
+                                                padding: '0.5rem'
+                                            }}>
+                                                {action}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Matrix rows */}
+                                    {matrix.map((row, i) => (
+                                        <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
+                                            {/* Row header */}
+                                            <div style={{
+                                                width: '120px',
+                                                fontSize: '0.9rem',
+                                                fontWeight: '600',
+                                                color: '#00d4ff',
+                                                padding: '0.5rem',
+                                                textAlign: 'right',
+                                                paddingRight: '1rem'
+                                            }}>
+                                                {actions.row[i]}
+                                            </div>
+
+                                            {/* Cells */}
+                                            {row.map((cell, j) => {
+                                                const isNash = isNashEquilibrium(i, j);
+                                                const isRowBR = rowBR[i][j];
+                                                const isColBR = colBR[i][j];
+                                                
+                                                return (
+                                                    <div
+                                                        key={j}
+                                                        onMouseEnter={() => setHoveredCell([i, j])}
+                                                        onMouseLeave={() => setHoveredCell(null)}
+                                                        style={{
+                                                            width: '140px',
+                                                            height: '100px',
+                                                            margin: '0.25rem',
+                                                            background: isNash && highlightNash
+                                                                ? 'linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(123, 47, 247, 0.2) 100%)'
+                                                                : 'rgba(255, 255, 255, 0.03)',
+                                                            border: isNash && highlightNash
+                                                                ? '2px solid rgba(0, 212, 255, 0.5)'
+                                                                : '1px solid rgba(255, 255, 255, 0.1)',
+                                                            borderRadius: '8px',
+                                                            padding: '0.75rem',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            justifyContent: 'center',
+                                                            alignItems: 'center',
+                                                            gap: '0.5rem',
+                                                            position: 'relative',
+                                                            transition: 'all 0.2s',
+                                                            cursor: selectedPreset === 'custom' ? 'pointer' : 'default',
+                                                            boxShadow: isNash && highlightNash 
+                                                                ? '0 0 20px rgba(0, 212, 255, 0.3)' 
+                                                                : 'none'
+                                                        }}
+                                                    >
+                                                        {isNash && highlightNash && (
+                                                            <div style={{
+                                                                position: 'absolute',
+                                                                top: '4px',
+                                                                right: '4px',
+                                                                fontSize: '1rem'
+                                                            }}>
+                                                                ⭐
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {/* Player 1 payoff */}
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.5rem'
+                                                        }}>
+                                                            {showBestResponse && isRowBR && (
+                                                                <div style={{
+                                                                    width: '6px',
+                                                                    height: '6px',
+                                                                    borderRadius: '50%',
+                                                                    background: '#00d4ff',
+                                                                    boxShadow: '0 0 8px rgba(0, 212, 255, 0.6)'
+                                                                }} />
+                                                            )}
+                                                            {selectedPreset === 'custom' ? (
+                                                                <input
+                                                                    type="number"
+                                                                    value={cell[0]}
+                                                                    onChange={(e) => updatePayoff(i, j, 0, e.target.value)}
+                                                                    style={{
+                                                                        width: '50px',
+                                                                        background: 'rgba(0, 212, 255, 0.1)',
+                                                                        border: '1px solid rgba(0, 212, 255, 0.3)',
+                                                                        borderRadius: '4px',
+                                                                        padding: '0.25rem',
+                                                                        color: '#00d4ff',
+                                                                        fontSize: '1rem',
+                                                                        fontWeight: '700',
+                                                                        textAlign: 'center',
+                                                                        fontFamily: 'inherit'
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <span style={{
+                                                                    fontSize: '1.1rem',
+                                                                    fontWeight: '700',
+                                                                    color: '#00d4ff'
+                                                                }}>
+                                                                    {cell[0]}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Player 2 payoff */}
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.5rem'
+                                                        }}>
+                                                            {showBestResponse && isColBR && (
+                                                                <div style={{
+                                                                    width: '6px',
+                                                                    height: '6px',
+                                                                    borderRadius: '50%',
+                                                                    background: '#7b2ff7',
+                                                                    boxShadow: '0 0 8px rgba(123, 47, 247, 0.6)'
+                                                                }}/>
+                                                            )}
+                                                            {selectedPreset === 'custom' ? (
+                                                                <input
+                                                                    type="number"
+                                                                    value={cell[1]}
+                                                                    onChange={(e) => updatePayoff(i, j, 1, e.target.value)}
+                                                                    style={{
+                                                                        width: '50px',
+                                                                        background: 'rgba(123, 47, 247, 0.1)',
+                                                                        border: '1px solid rgba(123, 47, 247, 0.3)',
+                                                                        borderRadius: '4px',
+                                                                        padding: '0.25rem',
+                                                                        color: '#7b2ff7',
+                                                                        fontSize: '1rem',
+                                                                        fontWeight: '700',
+                                                                        textAlign: 'center',
+                                                                        fontFamily: 'inherit'
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <span style={{
+                                                                    fontSize: '1.1rem',
+                                                                    fontWeight: '700',
+                                                                    color: '#7b2ff7'
+                                                                }}>
+                                                                    {cell[1]}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Analysis Panel */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Game Classification */}
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '1.5rem'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    marginBottom: '1rem'
+                                }}>
+                                    <Zap size={20} color="#00d4ff" />
+                                    <h3 style={{
+                                        fontSize: '1.1rem',
+                                        fontWeight: '700',
+                                        margin: 0,
+                                        color: '#00d4ff'
+                                    }}>
+                                        Game Classification
+                                    </h3>
+                                </div>
+                                
+                                <div style={{
+                                    background: `linear-gradient(135deg, ${classification.color}22 0%, ${classification.color}11 100%)`,
+                                    border: `1px solid ${classification.color}44`,
+                                    borderRadius: '8px',
+                                    padding: '1rem',
+                                    textAlign: 'center'
+                                }}>
+                                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>
+                                        {classification.icon}
+                                    </div>
+                                    <div style={{
+                                        fontSize: '1.1rem',
+                                        fontWeight: '700',
+                                        color: classification.color,
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em'
+                                    }}>
+                                        {classification.type}
+                                    </div>
+                                </div>
+
+                                <div style={{
+                                    marginTop: '1rem',
+                                    padding: '1rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    fontSize: '0.85rem',
+                                    lineHeight: '1.6',
+                                    color: '#a8a8c8'
+                                }}>
+                                    {classification.type === 'zero-sum' && (
+                                        <>
+                                            <strong style={{ color: '#e6e6fa' }}>Zero-sum game:</strong> One player's gain equals the other's loss. Sum of payoffs is always 0.
+                                        </>
+                                    )}
+                                    {classification.type === 'common-reward' && (
+                                        <>
+                                            <strong style={{ color: '#e6e6fa' }}>Common-reward game:</strong> Both players receive identical payoffs. Interests are perfectly aligned.
+                                        </>
+                                    )}
+                                    {classification.type === 'general-sum' && (
+                                        <>
+                                            <strong style={{ color: '#e6e6fa' }}>General-sum game:</strong> No restrictions on payoff relationships. Combines competitive and cooperative elements.
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Nash Equilibria */}
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '1.5rem'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    marginBottom: '1rem'
+                                }}>
+                                    <Target size={20} color="#00d4ff" />
+                                    <h3 style={{
+                                        fontSize: '1.1rem',
+                                        fontWeight: '700',
+                                        margin: 0,
+                                        color: '#00d4ff'
+                                    }}>
+                                        Nash Equilibria
+                                    </h3>
+                                </div>
+
+                                {nashEquilibria.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        {nashEquilibria.map(([i, j], idx) => (
+                                            <div key={idx} style={{
+                                                background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(123, 47, 247, 0.1) 100%)',
+                                                border: '1px solid rgba(0, 212, 255, 0.3)',
+                                                borderRadius: '8px',
+                                                padding: '1rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '1rem'
+                                            }}>
+                                                <div style={{ fontSize: '1.5rem' }}>⭐</div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{
+                                                        fontSize: '0.95rem',
+                                                        fontWeight: '600',
+                                                        marginBottom: '0.25rem'
+                                                    }}>
+                                                        ({actions.row[i]}, {actions.col[j]})
+                                                    </div>
+                                                    <div style={{
+                                                        fontSize: '0.85rem',
+                                                        color: '#a8a8c8',
+                                                        display: 'flex',
+                                                        gap: '1rem'
+                                                    }}>
+                                                        <span style={{ color: '#00d4ff' }}>P1: {matrix[i][j][0]}</span>
+                                                        <span style={{ color: '#7b2ff7' }}>P2: {matrix[i][j][1]}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div style={{
+                                        padding: '1.5rem',
+                                        textAlign: 'center',
+                                        color: '#a8a8c8',
+                                        fontSize: '0.9rem',
+                                        background: 'rgba(255, 255, 255, 0.02)',
+                                        borderRadius: '8px'
+                                    }}>
+                                        No pure strategy Nash equilibrium found.<br/>
+                                        Try a mixed strategy equilibrium!
+                                    </div>
+                                )}
+
+                                <div style={{
+                                    marginTop: '1rem',
+                                    padding: '1rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    fontSize: '0.85rem',
+                                    lineHeight: '1.6',
+                                    color: '#a8a8c8'
+                                }}>
+                                    <strong style={{ color: '#e6e6fa' }}>Nash Equilibrium:</strong> A joint strategy where no player can improve their payoff by unilaterally changing their action.
+                                </div>
+                            </div>
+
+                            {/* Controls */}
+                            <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '12px',
+                                padding: '1.5rem'
+                            }}>
+                                <h3 style={{
+                                    fontSize: '1.1rem',
+                                    fontWeight: '700',
+                                    margin: 0,
+                                    marginBottom: '1rem',
+                                    color: '#00d4ff'
+                                }}>
+                                    Display Options
+                                </h3>
+
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    padding: '0.75rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    marginBottom: '0.75rem',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={showBestResponse}
+                                        onChange={(e) => setShowBestResponse(e.target.checked)}
+                                        style={{
+                                            width: '18px',
+                                            height: '18px',
+                                            cursor: 'pointer',
+                                            accentColor: '#00d4ff'
+                                        }}
+                                    />
+                                    <span style={{ fontSize: '0.9rem' }}>Show Best Responses</span>
+                                </label>
+
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    padding: '0.75rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={highlightNash}
+                                        onChange={(e) => setHighlightNash(e.target.checked)}
+                                        style={{
+                                            width: '18px',
+                                            height: '18px',
+                                            cursor: 'pointer',
+                                            accentColor: '#00d4ff'
+                                        }}
+                                    />
+                                    <span style={{ fontSize: '0.9rem' }}>Highlight Nash Equilibria</span>
+                                </label>
+
+                                <div style={{
+                                    marginTop: '1rem',
+                                    padding: '1rem',
+                                    background: 'rgba(0, 212, 255, 0.05)',
+                                    border: '1px solid rgba(0, 212, 255, 0.2)',
+                                    borderRadius: '6px',
+                                    fontSize: '0.85rem',
+                                    lineHeight: '1.6',
+                                    color: '#a8a8c8'
+                                }}>
+                                    <div style={{ marginBottom: '0.5rem', color: '#00d4ff', fontWeight: '600' }}>
+                                        💡 Legend:
+                                    </div>
+                                    <div style={{ marginBottom: '0.25rem' }}>
+                                        • <span style={{ color: '#00d4ff' }}>Cyan dot</span> = Player 1's best response
+                                    </div>
+                                    <div style={{ marginBottom: '0.25rem' }}>
+                                        • <span style={{ color: '#7b2ff7' }}>Purple dot</span> = Player 2's best response
+                                    </div>
+                                    <div>
+                                        • ⭐ = Nash equilibrium (mutual best responses)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div style={{
+                        maxWidth: '1400px',
+                        margin: '2rem auto 0',
+                        padding: '1rem',
+                        textAlign: 'center',
+                        fontSize: '0.85rem',
+                        color: '#a8a8c8',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+                    }}>
+                        Select "Custom Game" to modify payoffs and explore different game structures
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<MatrixGameExplorer />, document.getElementById('root'));
+    </script>
+</body>
+</html>

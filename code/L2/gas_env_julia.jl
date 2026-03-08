@@ -194,7 +194,6 @@ function POMDPs.initialobs(p::GasStorageEnv, s)
     return Dirac(o)
 end
 
-
 function POMDPs.observation(p::GasStorageEnv, s_dummmy)
     gas_params = p.gas_params
     gas_state = p.gas_state
