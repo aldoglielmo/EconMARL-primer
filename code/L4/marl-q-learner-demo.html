@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MARL — Cooperative Grid World Demo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --border: rgba(15,23,42,0.12);
+    --border-md: rgba(15,23,42,0.22);
+    --success: #16a34a;
+    --danger: #dc2626;
+    --info: #2563eb;
+    --warning: #d97706;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --font: system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, 'Cascadia Code', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --border: rgba(241,245,249,0.1);
+      --border-md: rgba(241,245,249,0.2);
+      --success: #4ade80;
+      --danger: #f87171;
+      --info: #60a5fa;
+      --warning: #fbbf24;
+    }
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  h1 { font-size: 18px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6; }
+
+  .sc {
+    background: var(--bg-secondary);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px;
+  }
+
+  .stc {
+    background: var(--bg-secondary);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 7px 11px;
+  }
+
+  .stl { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+  .stv { font-size: 17px; font-weight: 500; font-family: var(--mono); color: var(--text-primary); }
+  .pt  { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+
+  .btn {
+    cursor: pointer;
+    border: 0.5px solid var(--border-md);
+    border-radius: var(--radius-md);
+    padding: 5px 12px;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .btn:hover { background: var(--bg-secondary); }
+  .btn.on { background: rgba(37,99,235,0.1); color: var(--info); border-color: var(--info); }
+
+  .stats-row   { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; margin-bottom: 13px; }
+  .panels-row  { display: flex; gap: 13px; margin-bottom: 13px; flex-wrap: wrap; }
+  .controls    { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+  .legend      { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .dot         { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .hmap-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .hmap-label  { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+  .grad-row    { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .grad-label  { font-size: 11px; color: var(--text-secondary); }
+  .hint        { font-size: 11px; color: var(--text-secondary); margin-top: 4px; text-align: center; }
+
+  /* param panel */
+  .param-panel {
+    background: var(--bg-secondary);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    margin-bottom: 13px;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .param-group { display: flex; flex-direction: column; gap: 5px; min-width: 200px; flex: 1; }
+  .param-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .param-label span {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  input[type=range] {
+    width: 100%;
+    accent-color: var(--info);
+    cursor: pointer;
+  }
+  .param-note-inline {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: var(--mono);
+    white-space: nowrap;
+    padding-bottom: 2px;
+  }
+  .pending-tag {
+    font-size: 10px;
+    background: rgba(217,119,6,0.15);
+    color: var(--warning);
+    border: 0.5px solid var(--warning);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: var(--mono);
+    display: none;
+  }
+  .pending-tag.show { display: inline-block; }
+</style>
+</head>
+<body>
+
+<h1>MARL — Cooperative Grid World</h1>
+<p class="subtitle">
+  Two independent agents learn to collect food at <strong>fixed locations</strong> via shared cooperative reward.
+  Independent Q-learning with ε-greedy exploration — food positions are fixed within each training run and only re-randomised on Reset, so Q-value maps are spatially meaningful.
+</p>
+
+<div class="stats-row">
+  <div class="stc"><div class="stl">Episode</div><div class="stv" id="v-ep">0</div></div>
+  <div class="stc"><div class="stl">Explore ε</div><div class="stv" id="v-eps">1.000</div></div>
+  <div class="stc"><div class="stl">Step</div><div class="stv" id="v-stp">0</div></div>
+  <div class="stc"><div class="stl">Last reward</div><div class="stv" id="v-r">—</div></div>
+  <div class="stc"><div class="stl">Avg (20 ep)</div><div class="stv" id="v-avg">—</div></div>
+</div>
+
+<!-- ── Parameter panel ── -->
+<div class="param-panel">
+  <div class="param-group">
+    <div class="param-label">
+      α — learning rate
+      <span id="lbl-alpha">0.15</span>
+    </div>
+    <input type="range" id="sl-alpha" min="0.01" max="0.99" step="0.01" value="0.15"
+           oninput="updateParam('alpha', this.value)">
+  </div>
+  <div class="param-group">
+    <div class="param-label">
+      γ — discount factor
+      <span id="lbl-gamma">0.90</span>
+    </div>
+    <input type="range" id="sl-gamma" min="0.01" max="0.99" step="0.01" value="0.90"
+           oninput="updateParam('gamma', this.value)">
+  </div>
+  <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:4px;padding-bottom:2px">
+    <span class="param-note-inline">ε-decay = 0.9975</span>
+    <span class="pending-tag" id="pending-tag">takes effect on reset ↺</span>
+  </div>
+</div>
+
+<div class="panels-row">
+  <div class="sc">
+    <div class="pt">Environment</div>
+    <canvas id="gc"></canvas>
+    <div class="legend">
+      <span><span class="dot" style="background:#22c55e"></span>Food (randomised on reset)</span>
+      <span><span class="dot" style="background:#60a5fa"></span>Agent A</span>
+      <span><span class="dot" style="background:#fb923c"></span>Agent B</span>
+    </div>
+  </div>
+
+  <div class="sc">
+    <div class="hmap-header">
+      <div class="hmap-label">Q-value heatmap — max<sub>a</sub> Q(s,a)</div>
+      <div style="display:flex;gap:4px">
+        <button class="btn on" id="ba" onclick="setAg(0)">Agent A</button>
+        <button class="btn"    id="bb" onclick="setAg(1)">Agent B</button>
+      </div>
+    </div>
+    <canvas id="hc"></canvas>
+    <div class="grad-row">
+      <span class="grad-label">low</span>
+      <canvas id="gb" height="8" style="flex:1;border-radius:4px"></canvas>
+      <span class="grad-label">high</span>
+    </div>
+    <div class="hint">□ food location &nbsp;·&nbsp; ○ agent position</div>
+  </div>
+</div>
+
+<div class="sc" style="margin-bottom:13px">
+  <div class="pt">Learning curve — episode reward</div>
+  <div style="position:relative;height:200px;width:100%">
+    <canvas id="rc"></canvas>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="rb" onclick="toggleRun()" style="border-color:var(--success);color:var(--success)">&#9654; Run</button>
+  <button class="btn" onclick="doReset()">&#8635; Reset</button>
+  <div style="display:flex;gap:4px;align-items:center">
+    <span style="font-size:12px;color:var(--text-secondary)">Speed:</span>
+    <button class="btn"    id="s1"  onclick="setSp(1)">×1</button>
+    <button class="btn on" id="s5"  onclick="setSp(5)">×5</button>
+    <button class="btn"    id="s20" onclick="setSp(20)">×20</button>
+    <button class="btn"    id="s50" onclick="setSp(50)">×50</button>
+  </div>
+</div>
+
+<div style="margin-top:14px;padding:10px 14px;background:var(--bg-secondary);border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:12px;color:var(--text-secondary);line-height:1.8">
+  <strong style="color:var(--text-primary);font-weight:500">Reward structure</strong> &nbsp;·&nbsp;
+  <span style="font-family:var(--mono)">+10</span> when either agent steps on an active food pellet (shared by both agents) &nbsp;·&nbsp;
+  <span style="font-family:var(--mono)">−0.05</span> per step (movement cost) &nbsp;·&nbsp;
+  Episode ends when all 4 pellets are collected or after <span style="font-family:var(--mono)">120</span> steps.
+  Food positions are <em>fixed within a training run</em> and only re-randomised when Reset is pressed — so Q-value maps remain spatially meaningful during learning.
+  <br><strong style="color:var(--text-primary);font-weight:500">Parameters</strong> &nbsp;·&nbsp;
+  α and γ sliders take effect on the next Reset — adjusting them mid-run does not disrupt ongoing learning.
+</div>
+
+<script>
+const G=9, CS=32, GW=G*CS;
+const NFOOD=4;
+const STARTS=[[0,0],[8,8]];
+
+/* ── live param values (read by tick) ── */
+let LR = 0.15;
+let GA = 0.90;
+let paramsDirty = false;
+
+function updateParam(name, val) {
+  const v = parseFloat(val);
+  if (name === 'alpha') {
+    document.getElementById('lbl-alpha').textContent = v.toFixed(2);
+    LR = v;
+  } else {
+    document.getElementById('lbl-gamma').textContent = v.toFixed(2);
+    GA = v;
+  }
+  /* only show the "takes effect on reset" tag if the simulation has already started */
+  if (st && (st.ep > 0 || st.stp > 0)) {
+    paramsDirty = true;
+    document.getElementById('pending-tag').classList.add('show');
+  }
+}
+
+function randomFood() {
+  const forbidden = new Set(STARTS.map(([r,c])=>r*G+c));
+  const positions = [];
+  while (positions.length < NFOOD) {
+    const r=Math.floor(Math.random()*G), c=Math.floor(Math.random()*G);
+    const k=r*G+c;
+    if (!forbidden.has(k)) { forbidden.add(k); positions.push([r,c]); }
+  }
+  return positions;
+}
+const DX=[[-1,0],[1,0],[0,-1],[0,1]];
+const AC=["#60a5fa","#fb923c"];
+const EM=0.05, ED=0.9975, FR=10, SC=-0.05, MS=120;
+
+const mkQ = () => Array.from({length: G*G}, () => [0,0,0,0]);
+const p2s = (r,c) => r*G+c;
+const cl  = (v,a,b) => Math.max(a, Math.min(b, v));
+
+function hcol(t) {
+  const r = t < .5 ? Math.round(10+t*40)     : Math.round(30+(t-.5)*2*220);
+  const g = Math.round(20+t*230);
+  const b = t < .5 ? Math.round(80+t*100)    : Math.round(180-(t-.5)*2*160);
+  return `rgb(${r},${g},${b})`;
+}
+
+let st, running=false, spd=5, selA=0, rafId=null;
+
+function initSt() {
+  const foodPos = randomFood();
+  return {
+    pos:     STARTS.map(p=>[...p]),
+    foodPos: foodPos,
+    food:    foodPos.map(()=>true),
+    Q:       [mkQ(), mkQ()],
+    eps:     1, ep:0, stp:0, epR:0, hist:[]
+  };
+}
+
+function tick() {
+  const s = st;
+  const acts = s.pos.map((p,i) => {
+    if (Math.random() < s.eps) return Math.floor(Math.random()*4);
+    const q = s.Q[i][p2s(...p)];
+    return q.indexOf(Math.max(...q));
+  });
+  const np = s.pos.map((p,i) => [
+    cl(p[0]+DX[acts[i]][0], 0, G-1),
+    cl(p[1]+DX[acts[i]][1], 0, G-1)
+  ]);
+  let r = SC;
+  const nf = [...s.food];
+  for (let fi=0; fi<s.foodPos.length; fi++) {
+    if (!nf[fi]) continue;
+    for (let ai=0; ai<2; ai++) {
+      if (np[ai][0]===s.foodPos[fi][0] && np[ai][1]===s.foodPos[fi][1]) { r+=FR; nf[fi]=false; break; }
+    }
+  }
+  for (let ai=0; ai<2; ai++) {
+    const os=p2s(...s.pos[ai]), ns=p2s(...np[ai]), a=acts[ai];
+    s.Q[ai][os][a] += LR*(r + GA*Math.max(...s.Q[ai][ns]) - s.Q[ai][os][a]);
+  }
+  s.pos=np; s.food=nf; s.epR+=r; s.stp++;
+  if (nf.every(f=>!f) || s.stp>=MS) {
+    s.ep++;
+    const w   = s.hist.slice(-19).map(h=>h.r);
+    const aw  = [...w, s.epR];
+    const avg = aw.reduce((a,b)=>a+b,0)/aw.length;
+    s.hist.push({ep:s.ep, r:+s.epR.toFixed(1), avg:+avg.toFixed(1)});
+    if (s.hist.length > 500) s.hist.splice(0, s.hist.length-500);
+    s.eps = Math.max(EM, s.eps*ED);
+    s.stp=0; s.epR=0;
+    s.pos  = STARTS.map(p=>[...p]);
+    s.food = s.foodPos.map(()=>true);
+  }
+}
+
+const gcv=document.getElementById('gc'), hcv=document.getElementById('hc'), gbv=document.getElementById('gb');
+gcv.width=hcv.width=GW; gcv.height=hcv.height=GW;
+gbv.width=200;
+const gx=gcv.getContext('2d'), hx=hcv.getContext('2d'), bx=gbv.getContext('2d');
+
+function isDark() { return window.matchMedia('(prefers-color-scheme:dark)').matches; }
+
+function drawGrid() {
+  const dk=isDark(), s=st;
+  gx.clearRect(0,0,GW,GW);
+  for (let r=0; r<G; r++) {
+    for (let c=0; c<G; c++) {
+      const fi   = st.foodPos.findIndex(([fr,fc])=>fr===r&&fc===c);
+      const isF  = fi>=0, fOn = isF && s.food[fi];
+      gx.fillStyle = dk
+        ? (fOn?'#14532d': isF?'#0d1f13':'#1a2535')
+        : (fOn?'#d1fae5': isF?'#f0fdf4':'#f1f5f9');
+      gx.fillRect(c*CS+1, r*CS+1, CS-2, CS-2);
+    }
+  }
+  st.foodPos.forEach(([fr,fc],fi) => {
+    if (s.food[fi]) {
+      gx.beginPath(); gx.arc(fc*CS+CS/2, fr*CS+CS/2, 8, 0, 2*Math.PI);
+      gx.fillStyle='#22c55e'; gx.fill();
+      gx.beginPath(); gx.arc(fc*CS+CS/2, fr*CS+CS/2, 4, 0, 2*Math.PI);
+      gx.fillStyle='#86efac'; gx.fill();
+    } else {
+      gx.beginPath(); gx.arc(fc*CS+CS/2, fr*CS+CS/2, 7, 0, 2*Math.PI);
+      gx.strokeStyle=dk?'#166534':'#a7f3d0'; gx.lineWidth=1;
+      gx.setLineDash([3,2]); gx.stroke(); gx.setLineDash([]);
+    }
+  });
+  gx.strokeStyle=dk?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.07)'; gx.lineWidth=0.5;
+  for (let i=0; i<=G; i++) {
+    gx.beginPath(); gx.moveTo(i*CS,0); gx.lineTo(i*CS,GW); gx.stroke();
+    gx.beginPath(); gx.moveTo(0,i*CS); gx.lineTo(GW,i*CS); gx.stroke();
+  }
+  s.pos.forEach(([r,c],ai) => {
+    gx.beginPath(); gx.arc(c*CS+CS/2, r*CS+CS/2, 12, 0, 2*Math.PI);
+    gx.fillStyle=AC[ai]; gx.fill();
+    gx.strokeStyle='#fff'; gx.lineWidth=1.5; gx.stroke();
+    gx.fillStyle='#fff'; gx.font='bold 11px monospace';
+    gx.textAlign='center'; gx.textBaseline='middle';
+    gx.fillText(ai===0?'A':'B', c*CS+CS/2, r*CS+CS/2);
+  });
+}
+
+function drawHeat() {
+  const s=st;
+  const qv   = s.Q[selA].map(q=>Math.max(...q));
+  const qMin = Math.min(...qv), qMax=Math.max(...qv), qR=(qMax-qMin)||1;
+  hx.clearRect(0,0,GW,GW);
+  for (let r=0; r<G; r++) {
+    for (let c=0; c<G; c++) {
+      hx.fillStyle=hcol((qv[p2s(r,c)]-qMin)/qR);
+      hx.fillRect(c*CS+1, r*CS+1, CS-2, CS-2);
+    }
+  }
+  st.foodPos.forEach(([fr,fc]) => {
+    hx.strokeStyle='rgba(255,255,255,0.6)'; hx.lineWidth=1.5;
+    hx.setLineDash([3,2]); hx.strokeRect(fc*CS+2, fr*CS+2, CS-4, CS-4); hx.setLineDash([]);
+  });
+  hx.beginPath();
+  hx.arc(s.pos[selA][1]*CS+CS/2, s.pos[selA][0]*CS+CS/2, 12, 0, 2*Math.PI);
+  hx.strokeStyle='#fff'; hx.lineWidth=2.5; hx.stroke();
+}
+
+function drawGradBar() {
+  const grad=bx.createLinearGradient(0,0,200,0);
+  for (let t=0; t<=1; t+=0.1) grad.addColorStop(t, hcol(t));
+  bx.fillStyle=grad; bx.fillRect(0,0,200,8);
+}
+
+function updateStats() {
+  const s=st, last=s.hist[s.hist.length-1];
+  document.getElementById('v-ep').textContent  = s.ep;
+  document.getElementById('v-eps').textContent = s.eps.toFixed(3);
+  document.getElementById('v-stp').textContent = s.stp;
+  document.getElementById('v-r').textContent   = last ? last.r  : '—';
+  document.getElementById('v-avg').textContent = last ? last.avg : '—';
+}
+
+let chart;
+function initChart() {
+  const ctx = document.getElementById('rc').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label:'Episode reward', data:[], borderColor:'#60a5fa', borderWidth:1, pointRadius:0, tension:0.2, borderDash:[4,2], fill:false },
+        { label:'Rolling avg (20)', data:[], borderColor:'#34d399', borderWidth:2, pointRadius:0, tension:0.4, fill:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:false, resizeDelay:0,
+      plugins: {
+        legend: { labels:{ font:{size:11}, color:'#94a3b8', boxWidth:18, padding:12 } },
+        tooltip: { enabled:true }
+      },
+      scales: {
+        x: { ticks:{maxTicksLimit:8, font:{size:10}, color:'#94a3b8'}, grid:{color:'rgba(100,116,139,0.15)'},
+             title:{display:true, text:'Episode', color:'#94a3b8', font:{size:10}} },
+        y: { ticks:{font:{size:10}, color:'#94a3b8'}, grid:{color:'rgba(100,116,139,0.15)'} }
+      }
+    }
+  });
+}
+
+function updateChart() {
+  const h = st.hist.slice(-200);
+  chart.data.labels = h.map(x=>x.ep);
+  chart.data.datasets[0].data = h.map(x=>x.r);
+  chart.data.datasets[1].data = h.map(x=>x.avg);
+  chart.update('none');
+}
+
+function render() { drawGrid(); drawHeat(); updateStats(); updateChart(); }
+
+function toggleRun() {
+  running = !running;
+  const b = document.getElementById('rb');
+  if (running) {
+    b.textContent='⏸ Pause'; b.style.borderColor='var(--danger)'; b.style.color='var(--danger)';
+    loop();
+  } else {
+    b.textContent='▶ Run'; b.style.borderColor='var(--success)'; b.style.color='var(--success)';
+    if (rafId) cancelAnimationFrame(rafId);
+  }
+}
+
+function loop() {
+  for (let i=0; i<spd; i++) tick();
+  render();
+  if (running) rafId = requestAnimationFrame(loop);
+}
+
+function doReset() {
+  running=false; if (rafId) cancelAnimationFrame(rafId);
+  const b = document.getElementById('rb');
+  b.textContent='▶ Run'; b.style.borderColor='var(--success)'; b.style.color='var(--success)';
+  /* hide the pending tag — params are now active */
+  paramsDirty = false;
+  document.getElementById('pending-tag').classList.remove('show');
+  st=initSt(); render();
+  chart.data.labels=[]; chart.data.datasets.forEach(d=>d.data=[]); chart.update();
+}
+
+function setSp(n) {
+  spd=n; [1,5,20,50].forEach(s=>document.getElementById('s'+s).classList.toggle('on',s===n));
+}
+
+function setAg(i) {
+  selA=i;
+  document.getElementById('ba').classList.toggle('on', i===0);
+  document.getElementById('bb').classList.toggle('on', i===1);
+  drawHeat();
+}
+
+st=initSt();
+drawGradBar();
+initChart();
+render();
+</script>
+</body>
+</html>
