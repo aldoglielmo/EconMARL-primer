@@ -216,3 +216,15 @@ events.out.tfevents.*
 
 # video
 *.mp4
+
+#pkl files
+*.pkl
+
+#json files
+*.json
+
+# csv
+*.csv
+
+#txt
+*.txt

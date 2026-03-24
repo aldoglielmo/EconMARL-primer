@@ -136,11 +136,17 @@ class RBCSimulator_KL:
         """Return current‑period utilities for all agents."""
         return np.array([_CRRA_utility_cl(c, l, self.gamma) for c, l in zip(self.cs, self.ls)])
 
-    def get_utilities(self):
-        mask = self.cs <= 0
-        safe_cs = np.where(mask, 1.0, self.cs)
-        u = np.where(mask, -1e9, np.log(safe_cs))  # gamma=1 case
-        return u
+    def get_utilities(self, b=5.0):
+        mask_c = self.cs <= 0
+        safe_cs = np.where(mask_c, 1.0, self.cs)
+        u_c = np.where(mask_c, -1e9, np.log(safe_cs))  # gamma=1 case
+
+        leisure = 1.0 - self.ls
+        mask_l = leisure <= 0
+        safe_l = np.where(mask_l, 1.0, leisure)
+        u_l = np.where(mask_l, -1e9, np.log(safe_l))
+
+        return u_c + b * u_l
 # ------------------------------------------------------------------
 # KL Variants -------------------------------------------------------
 # ------------------------------------------------------------------
